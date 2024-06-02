@@ -1,11 +1,23 @@
 const express = require("express");
-const app = express();
 const cors = require("cors");
+const app = express();
+var jwt = require("jsonwebtoken");
+var cookieParser = require("cookie-parser");
 require("dotenv").config();
 const port = process.env.PORT || 5000;
 // middleware
-app.use(cors());
+app.use(
+  cors({
+    origin: [
+      "http://localhost:5173",
+      "https://blog-website-e15da.web.app",
+      "https://blog-website-e15da.firebaseapp.com",
+    ],
+    credentials: true,
+  })
+);
 app.use(express.json());
+app.use(cookieParser());
 
 const { MongoClient, ServerApiVersion } = require("mongodb");
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.ityl5rk.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
@@ -18,6 +30,12 @@ const client = new MongoClient(uri, {
     deprecationErrors: true,
   },
 });
+// middleware
+const cookeOption = {
+  httpOnly: true,
+  secure: process.env.NODE_ENV === "production" ? true : false,
+  sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
+};
 
 async function run() {
   try {
@@ -25,6 +43,23 @@ async function run() {
     // await client.connect();
 
     const userCollection = client.db("PetPalsDB").collection("users");
+
+    // jwt related api
+    app.post("/jwt", async (req, res) => {
+      const user = req.body;
+      // console.log("user of token", user);
+      const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
+        expiresIn: "1h",
+      });
+      res.cookie("token", token, cookeOption).send({ success: true });
+    });
+    app.post("/logout", async (req, res) => {
+      const user = req.body;
+      console.log("logout", user);
+      res
+        .clearCookie("token", { ...cookeOption, maxAge: 0 })
+        .send({ success: true });
+    });
 
     app.post("/users", async (req, res) => {
       const user = req.body;
