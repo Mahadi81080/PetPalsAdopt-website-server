@@ -2,6 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const app = express();
 var jwt = require("jsonwebtoken");
+const { MongoClient, ServerApiVersion } = require("mongodb");
 var cookieParser = require("cookie-parser");
 require("dotenv").config();
 const port = process.env.PORT || 5000;
@@ -19,7 +20,6 @@ app.use(
 app.use(express.json());
 app.use(cookieParser());
 
-const { MongoClient, ServerApiVersion } = require("mongodb");
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.ityl5rk.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
 // Create a MongoClient with a MongoClientOptions object to set the Stable API version
@@ -31,6 +31,25 @@ const client = new MongoClient(uri, {
   },
 });
 // middleware
+const logger = async (req, res, next) => {
+  console.log("called".req.host, req.originalUrl);
+  next();
+};
+const verifyToken = async (req, res, next) => {
+  const token = req.cookies?.token;
+  console.log("Value of token in middleware", token);
+  if (!token) {
+    return res.status(401).send({ message: "unauthorized token" });
+  }
+  jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
+    if (err) {
+      return res.status(401).send({ message: "unauthorized access" });
+    }
+    req.user = decoded;
+    next();
+  });
+};
+
 const cookeOption = {
   httpOnly: true,
   secure: process.env.NODE_ENV === "production" ? true : false,
@@ -43,6 +62,7 @@ async function run() {
     // await client.connect();
 
     const userCollection = client.db("PetPalsDB").collection("users");
+    const petItemCollection = client.db("PetPalsDB").collection("petItems");
 
     // jwt related api
     app.post("/jwt", async (req, res) => {
@@ -55,11 +75,12 @@ async function run() {
     });
     app.post("/logout", async (req, res) => {
       const user = req.body;
-      console.log("logout", user);
+      // console.log("logout", user);
       res
         .clearCookie("token", { ...cookeOption, maxAge: 0 })
         .send({ success: true });
     });
+    // User related api
 
     app.post("/users", async (req, res) => {
       const user = req.body;
@@ -74,6 +95,22 @@ async function run() {
       res.send(result);
     });
 
+    // Pet item related api
+    app.get("/petItem", async (req, res) => {
+      const result = await petItemCollection.find().toArray();
+      res.send(result);
+    });
+    app.post("/petItem", async (req, res) => {
+      const item = req.body;
+      const result = await petItemCollection.insertOne(item);
+      res.send(result);
+    });
+    app.delete("/petItem/:id", verifyToken, async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await userCollection.deleteOne(query);
+      res.send(result);
+    });
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
