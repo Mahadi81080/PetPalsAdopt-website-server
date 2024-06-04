@@ -2,7 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const app = express();
 var jwt = require("jsonwebtoken");
-const { MongoClient, ServerApiVersion } = require("mongodb");
+const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 var cookieParser = require("cookie-parser");
 require("dotenv").config();
 const port = process.env.PORT || 5000;
@@ -100,16 +100,53 @@ async function run() {
       const result = await petItemCollection.find().toArray();
       res.send(result);
     });
+    app.get("/petItem/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await petItemCollection.findOne(query);
+      res.send(result);
+    });
     app.post("/petItem", async (req, res) => {
       const item = req.body;
       const result = await petItemCollection.insertOne(item);
       res.send(result);
     });
-    app.delete("/petItem/:id", verifyToken, async (req, res) => {
+    app.patch("/petItem/:id", async (req, res) => {
+      const item = req.body;
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const updateDoc = {
+        $set: {
+          name: item.name,
+          category: item.category,
+          age: item.age,
+          location: item.location,
+          shortDescription: item.shortDescription,
+          longDescription: item.longDescription,
+          image: item.image,
+          date: item.date,
+        },
+      };
+      const result = await petItemCollection.updateOne(filter, updateDoc);
+      res.send(result);
+    });
+    app.delete("/petItem/:id", async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const result = await userCollection.deleteOne(query);
       res.send(result);
+    });
+    // pet adopted related api
+    app.patch("/petAdopt/:id", async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const updatedDoc = {
+        $set: {
+          adopted: "true",
+        },
+      };
+      const result =await petItemCollection.updateOne(filter,updatedDoc)
+      res.send(result)
     });
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
