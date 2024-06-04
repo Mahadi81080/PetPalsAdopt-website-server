@@ -63,6 +63,7 @@ async function run() {
 
     const userCollection = client.db("PetPalsDB").collection("users");
     const petItemCollection = client.db("PetPalsDB").collection("petItems");
+    const donationCollection = client.db("PetPalsDB").collection("donation");
 
     // jwt related api
     app.post("/jwt", async (req, res) => {
@@ -148,6 +149,12 @@ async function run() {
       const result =await petItemCollection.updateOne(filter,updatedDoc)
       res.send(result)
     });
+    // Donation related api
+    app.post("/donation",async(req,res)=>{
+      const item =req.body
+      const result = await donationCollection.insertOne(item)
+      res.send(result)
+    })
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
