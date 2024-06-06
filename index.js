@@ -176,6 +176,44 @@ async function run() {
       const result = await donationCollection.insertOne(item);
       res.send(result);
     });
+    app.patch("/donation/:id", async (req, res) => {
+      const item = req.body;
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const updateDoc = {
+        $set: {
+          name: item.name,
+          maxDonationAmount: item.maxDonationAmount,
+          lastDate: item.lastDate,
+          shortDescription: item.shortDescription,
+          longDescription: item.longDescription,
+          image: item.image,
+          date: item.date,
+          donation: item.donation,
+        },
+      };
+      const result = await donationCollection.updateOne(filter, updateDoc);
+      res.send(result);
+    });
+    // donation stop related api
+    app.patch("/donationStop/:id", async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+
+      // Find the current donation status
+      const pet = await donationCollection.findOne(filter);
+      const newDonationStatus = !pet.donation; // Toggle the current status
+
+      const updatedDoc = {
+        $set: {
+          donation: newDonationStatus,
+        },
+      };
+
+      const result = await donationCollection.updateOne(filter, updatedDoc);
+      res.send(result);
+    });
+
     // Payment intent
     app.post("/create-payment-intent", async (req, res) => {
       const { donation } = req.body;
@@ -189,6 +227,11 @@ async function run() {
         clientSecret: paymentIntent.client_secret,
       });
     });
+    app.get("/payments", async (req, res) => {
+      const result = await paymentCollection.find().toArray();
+      res.send(result);
+    });
+    // TODO
     app.post("/payments", async (req, res) => {
       const payment = req.body;
       const result = await paymentCollection.insertOne(payment);
