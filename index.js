@@ -1,10 +1,11 @@
 const express = require("express");
 const cors = require("cors");
 const app = express();
-var jwt = require("jsonwebtoken");
+const jwt = require("jsonwebtoken");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
-var cookieParser = require("cookie-parser");
+const cookieParser = require("cookie-parser");
 require("dotenv").config();
+const stripe = require("stripe")(process.env.STRIPE_SCREET_KEY);
 const port = process.env.PORT || 5000;
 // middleware
 app.use(
@@ -64,6 +65,10 @@ async function run() {
     const userCollection = client.db("PetPalsDB").collection("users");
     const petItemCollection = client.db("PetPalsDB").collection("petItems");
     const donationCollection = client.db("PetPalsDB").collection("donation");
+    const paymentCollection = client.db("PetPalsDB").collection("payments");
+    const adoptRequestCollection = client
+      .db("PetPalsDB")
+      .collection("adoptRequest");
 
     // jwt related api
     app.post("/jwt", async (req, res) => {
@@ -146,15 +151,49 @@ async function run() {
           adopted: "true",
         },
       };
-      const result =await petItemCollection.updateOne(filter,updatedDoc)
-      res.send(result)
+      const result = await petItemCollection.updateOne(filter, updatedDoc);
+      res.send(result);
+    });
+    // Adopt request related api
+    app.post("/adoptRequest", async (req, res) => {
+      const request = req.body;
+      const result = await adoptRequestCollection.insertOne(request);
+      res.send(result);
     });
     // Donation related api
-    app.post("/donation",async(req,res)=>{
-      const item =req.body
-      const result = await donationCollection.insertOne(item)
-      res.send(result)
-    })
+    app.get("/donation", async (req, res) => {
+      const result = await donationCollection.find().toArray();
+      res.send(result);
+    });
+    app.get("/donation/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await donationCollection.findOne(query);
+      res.send(result);
+    });
+    app.post("/donation", async (req, res) => {
+      const item = req.body;
+      const result = await donationCollection.insertOne(item);
+      res.send(result);
+    });
+    // Payment intent
+    app.post("/create-payment-intent", async (req, res) => {
+      const { donation } = req.body;
+      const amount = parseInt(donation * 100);
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: amount,
+        currency: "usd",
+        payment_method_types: ["card"],
+      });
+      res.send({
+        clientSecret: paymentIntent.client_secret,
+      });
+    });
+    app.post("/payments", async (req, res) => {
+      const payment = req.body;
+      const result = await paymentCollection.insertOne(payment);
+      res.send(result);
+    });
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log(
