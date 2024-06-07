@@ -3,23 +3,17 @@ const cors = require("cors");
 const app = express();
 const jwt = require("jsonwebtoken");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
-const cookieParser = require("cookie-parser");
 require("dotenv").config();
 const stripe = require("stripe")(process.env.STRIPE_SCREET_KEY);
 const port = process.env.PORT || 5000;
 // middleware
 app.use(
   cors({
-    origin: [
-      "http://localhost:5173",
-      "https://blog-website-e15da.web.app",
-      "https://blog-website-e15da.firebaseapp.com",
-    ],
+    origin: ["http://localhost:5173"],
     credentials: true,
   })
 );
 app.use(express.json());
-app.use(cookieParser());
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.ityl5rk.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
@@ -36,25 +30,19 @@ const logger = async (req, res, next) => {
   console.log("called".req.host, req.originalUrl);
   next();
 };
-const verifyToken = async (req, res, next) => {
-  const token = req.cookies?.token;
-  console.log("Value of token in middleware", token);
-  if (!token) {
-    return res.status(401).send({ message: "unauthorized token" });
+const verifyToken = (req, res, next) => {
+  // console.log("inside vrify token", req.headers.authorization);
+  if (!req.headers.authorization) {
+    return res.status(401).send({ message: "Unauthorized access" });
   }
+  const token = req.headers.authorization.split(" ")[1];
   jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, decoded) => {
     if (err) {
-      return res.status(401).send({ message: "unauthorized access" });
+      return res.status(401).send({ message: "Unauthorized access" });
     }
-    req.user = decoded;
+    req.decoded = decoded;
     next();
   });
-};
-
-const cookeOption = {
-  httpOnly: true,
-  secure: process.env.NODE_ENV === "production" ? true : false,
-  sameSite: process.env.NODE_ENV === "production" ? "none" : "strict",
 };
 
 async function run() {
@@ -73,25 +61,17 @@ async function run() {
     // jwt related api
     app.post("/jwt", async (req, res) => {
       const user = req.body;
-      // console.log("user of token", user);
       const token = jwt.sign(user, process.env.ACCESS_TOKEN_SECRET, {
         expiresIn: "1h",
       });
-      res.cookie("token", token, cookeOption).send({ success: true });
-    });
-    app.post("/logout", async (req, res) => {
-      const user = req.body;
-      // console.log("logout", user);
-      res
-        .clearCookie("token", { ...cookeOption, maxAge: 0 })
-        .send({ success: true });
+      res.send({ token });
     });
     // User related api
-    app.get("/users", async (req, res) => {
+    app.get("/users", verifyToken, async (req, res) => {
       const result = await userCollection.find().toArray();
       res.send(result);
     });
-    app.get("/users/admin/:email", async (req, res) => {
+    app.get("/users/admin/:email", verifyToken, async (req, res) => {
       const email = req.params.email;
       if (email !== req.decoded.email) {
         return res.status(403).send({ message: "forbidden access" });
@@ -116,6 +96,17 @@ async function run() {
       const result = await userCollection.insertOne(user);
       res.send(result);
     });
+    app.patch("/users/admin/:id", async (req, res) => {
+      const id = req.params.id;
+      const filter = { _id: new ObjectId(id) };
+      const updateDoc = {
+        $set: {
+          role: "admin",
+        },
+      };
+      const result = await userCollection.updateOne(filter, updateDoc);
+      res.send(result);
+    });
 
     // Pet item related api
     app.get("/petItem", async (req, res) => {
@@ -128,7 +119,7 @@ async function run() {
       const result = await petItemCollection.findOne(query);
       res.send(result);
     });
-    app.post("/petItem", async (req, res) => {
+    app.post("/petItem", verifyToken, async (req, res) => {
       const item = req.body;
       const result = await petItemCollection.insertOne(item);
       res.send(result);
@@ -155,7 +146,7 @@ async function run() {
     app.delete("/petItem/:id", async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
-      const result = await userCollection.deleteOne(query);
+      const result = await petItemCollection.deleteOne(query);
       res.send(result);
     });
     // pet adopted related api
@@ -166,14 +157,25 @@ async function run() {
     app.patch("/petAdopt/:id", async (req, res) => {
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
+    
+      // Fetch the current status of the pet
+      const pet = await petItemCollection.findOne(filter);
+      if (!pet) {
+        return res.status(404).send({ message: "Pet not found" });
+      }
+    
+      // Toggle the adopted status
       const updatedDoc = {
         $set: {
-          adopted: "true",
+          adopted: !pet.adopted, // Toggle the adopted status
         },
       };
+    
+      // Update the pet status in the database
       const result = await petItemCollection.updateOne(filter, updatedDoc);
       res.send(result);
     });
+    
     // Adopt request related api
     app.post("/adoptRequest", async (req, res) => {
       const request = req.body;
