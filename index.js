@@ -157,25 +157,25 @@ async function run() {
     app.patch("/petAdopt/:id", async (req, res) => {
       const id = req.params.id;
       const filter = { _id: new ObjectId(id) };
-    
+
       // Fetch the current status of the pet
       const pet = await petItemCollection.findOne(filter);
       if (!pet) {
         return res.status(404).send({ message: "Pet not found" });
       }
-    
+
       // Toggle the adopted status
       const updatedDoc = {
         $set: {
           adopted: !pet.adopted, // Toggle the adopted status
         },
       };
-    
+
       // Update the pet status in the database
       const result = await petItemCollection.updateOne(filter, updatedDoc);
       res.send(result);
     });
-    
+
     // Adopt request related api
     app.post("/adoptRequest", async (req, res) => {
       const request = req.body;
@@ -215,6 +215,12 @@ async function run() {
         },
       };
       const result = await donationCollection.updateOne(filter, updateDoc);
+      res.send(result);
+    });
+    app.delete("/donation/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await donationCollection.deleteOne(query);
       res.send(result);
     });
     // donation stop related api
